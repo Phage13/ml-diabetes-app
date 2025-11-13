@@ -2,9 +2,13 @@ from flask import Flask, request, render_template
 import joblib
 import numpy as np
 
+from flask import Flask, request, render_template
+import joblib
+import numpy as np
+
 app = Flask(__name__)
 
-# Load the trained model
+# Load the trained model (pipeline with ColumnTransformer)
 model = joblib.load("models/best_diabetes_model.pkl")
 
 @app.route("/")
@@ -15,12 +19,14 @@ def home():
 def predict():
     try:
         # Extract form inputs
+        gender = int(request.form.get("gender"))
         age = float(request.form.get("age"))
+        hypertension = int(request.form.get("hypertension"))
+        heart_disease = int(request.form.get("heart_disease"))
+        smoking = request.form.get("smoking_history")
         bmi = float(request.form.get("bmi"))
         hba1c = float(request.form.get("HbA1c_level"))
         glucose = float(request.form.get("blood_glucose_level"))
-        gender = int(request.form.get("gender"))
-        smoking = request.form.get("smoking_history")
 
         # Validation checks
         if not (1 <= age <= 120):
@@ -33,11 +39,24 @@ def predict():
             return render_template("index.html", prediction_text="Error: Blood glucose must be between 50 and 400 mg/dL.")
         if gender not in [0, 1]:
             return render_template("index.html", prediction_text="Error: Gender must be 0 (Female) or 1 (Male).")
+        if hypertension not in [0, 1]:
+            return render_template("index.html", prediction_text="Error: Hypertension must be 0 (No) or 1 (Yes).")
+        if heart_disease not in [0, 1]:
+            return render_template("index.html", prediction_text="Error: Heart disease must be 0 (No) or 1 (Yes).")
         if smoking not in ["No Info", "never", "former", "current", "not current", "ever"]:
             return render_template("index.html", prediction_text="Error: Invalid smoking history category.")
 
-        # Prepare features for model
-        features = np.array([age, bmi, hba1c, glucose, gender, smoking]).reshape(1, -1)
+        # Prepare features for model (8 features, same order as training)
+        features = np.array([
+            gender,
+            age,
+            hypertension,
+            heart_disease,
+            smoking,
+            bmi,
+            hba1c,
+            glucose
+        ]).reshape(1, -1)
 
         # Predict
         prediction = model.predict(features)[0]
