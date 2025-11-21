@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: diabetes-train-job
+spec:
+  template:
+    spec:
+      containers:
+        - name: diabetes-train
+          image: 668781151236.dkr.ecr.us-east-2.amazonaws.com/diabetes-train:latest
+          command: ["python", "train.py"]
+          args: ["--input-path", "diabetes_prediction_dataset.csv", "--model-dir", "/opt/program/model"]
+          volumeMounts:
+            - name: model-output
+              mountPath: /opt/program/model
+      restartPolicy: Never
+      volumes:
+        - name: model-output
+          emptyDir: {}
+  backoffLimit: 2

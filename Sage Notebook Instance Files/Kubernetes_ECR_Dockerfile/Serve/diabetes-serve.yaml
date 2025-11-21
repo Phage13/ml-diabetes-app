@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diabetes-serve-deployment
+  labels:
+    app: diabetes-serve
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: diabetes-serve
+  template:
+    metadata:
+      labels:
+        app: diabetes-serve
+    spec:
+      containers:
+        - name: diabetes-serve
+          image: 668781151236.dkr.ecr.us-east-2.amazonaws.com/diabetes-serve:v7
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diabetes-serve-service
+spec:
+  selector:
+    app: diabetes-serve
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: LoadBalancer
