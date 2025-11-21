@@ -1,0 +1,27 @@
+name: Deploy Diabetes Prediction App
+
+on:
+  push:
+    branches:
+      - main   
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"  
+
+      - name: Deploy to Heroku (Diabetes App)
+        uses: akhileshns/heroku-deploy@v3.12.12
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: "diabetes-prediction-app"   # Replace with your actual Heroku app name
+          heroku_email: ${{ secrets.HEROKU_EMAIL }}
+          usedocker: true   # Important: tells the action to deploy using Dockerfile

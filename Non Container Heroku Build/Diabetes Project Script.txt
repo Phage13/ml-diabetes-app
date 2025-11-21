@@ -1,0 +1,142 @@
+Deploy Kubernetes Application(s) using Docker Flask and ECR in Amazona CloudWatch
+
+##############################################
+# 📂 STEP 1: Sync project files from S3
+##############################################
+mkdir ~/diabetes-project
+cd ~/diabetes-project
+aws s3 sync s3://<your-bucket-name>/diabetes-project ~/diabetes-project
+
+##############################################
+# 🐳 STEP 2: Build & Push Docker image to ECR
+##############################################
+# Authenticate Docker to ECR
+aws ecr get-login-password --region us-east-2 | \
+docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-2.amazonaws.com
+
+# Build image locally
+docker build -t diabetes-serve:v7 .
+
+# Tag image for ECR
+docker tag diabetes-serve:v7 <account-id>.dkr.ecr.us-east-2.amazonaws.com/diabetes-serve:v7
+
+# Push image to ECR
+docker push <account-id>.dkr.ecr.us-east-2.amazonaws.com/diabetes-serve:v7
+
+##############################################
+# ☸️ STEP 3: Deploy to Kubernetes
+##############################################
+# Apply Deployment + Service YAML
+kubectl apply -f diabetes-serve.yaml
+
+# Verify pods and service
+kubectl get pods
+kubectl get svc diabetes-serve-service
+
+##############################################
+# 🔧 STEP 4: Troubleshooting & Validation
+##############################################
+# Inspect service details (DNS, ports)
+kubectl describe svc diabetes-serve-service
+
+# View logs from a running pod
+kubectl logs <pod-name>
+
+# Test health endpoint
+curl http://<LoadBalancer-DNS>/health
+
+# Send prediction requests
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"data":[["male",45,0,0,"never",28.1,5.6,150]]}' \
+  http://<LoadBalancer-DNS>/predict
+
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"data":[["female",60,1,0,"former",32.5,7.2,180]]}' \
+  http://<LoadBalancer-DNS>/predict
+
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"data":[["male",35,0,1,"current",26.8,5.1,140]]}' \
+  http://<LoadBalancer-DNS>/predict
+
+##############################################
+# 🗑️ STEP 5: Cleanup (stop charges)
+##############################################
+# Delete workloads
+kubectl delete deployment diabetes-serve-deployment
+kubectl delete service diabetes-serve-service
+kubectl delete job diabetes-train-job
+
+# Check clusters
+aws eks list-clusters
+
+# Delete cluster control plane
+aws eks delete-cluster --name diabetes-cluster
+
+# List node groups (EC2 worker nodes)
+aws eks list-nodegroups --cluster-name diabetes-cluster
+
+# Delete node groups
+aws eks delete-nodegroup --cluster-name diabetes-cluster --nodegroup-name <nodegroup-name>
+
+# Optional: clean up ECR repo
+aws ecr delete-repository --repository-name diabetes-serve --force
+
+# Optional: clean up CloudWatch logs
+aws logs delete-log-group --log-group-name /aws/eks/diabetes-cluster/cluster
+
+
+
+
+##############################################
+# Kubernetes Configuration File:  (diabetes-serve.yaml)
+##############################################
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diabetes-serve-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: diabetes-serve
+  template:
+    metadata:
+      labels:
+        app: diabetes-serve
+    spec:
+      containers:
+      - name: diabetes-serve
+        image: <account-id>.dkr.ecr.us-east-2.amazonaws.com/diabetes-serve:v7
+        ports:
+        - containerPort: 5000
+        imagePullPolicy: Always
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diabetes-serve-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: diabetes-serve
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+
+
+
